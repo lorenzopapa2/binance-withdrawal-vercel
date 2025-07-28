@@ -1,34 +1,20 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/main.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb"
-      }
-    },
-    {
-      "src": "static/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/api/main.py"
-    }
-  ],
   "regions": ["hkg1"],
   "functions": {
     "api/main.py": {
       "maxDuration": 30,
-      "memory": 1024,
-      "regions": ["hkg1"]
+      "memory": 1024
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/api/main.py"
+    }
+  ]
 }
