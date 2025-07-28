@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "api/main.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb"
+      }
     },
     {
       "src": "static/**",
@@ -19,5 +22,13 @@
       "src": "/(.*)",
       "dest": "/api/main.py"
     }
-  ]
+  ],
+  "regions": ["hkg1"],
+  "functions": {
+    "api/main.py": {
+      "maxDuration": 30,
+      "memory": 1024,
+      "regions": ["hkg1"]
+    }
+  }
 }
