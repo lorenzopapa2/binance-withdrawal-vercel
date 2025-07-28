@@ -347,20 +347,5 @@ def api_ip_info():
         logger.error(f'获取IP信息失败: {str(e)}')
         return jsonify({'success': False, 'message': '获取IP信息失败'})
 
-# Vercel serverless function handler
-def handler(request, response):
-    with app.test_request_context(
-        request.url,
-        method=request.method,
-        headers=dict(request.headers),
-        data=request.body
-    ):
-        try:
-            rv = app.full_dispatch_request()
-            response.status_code = rv.status_code
-            response.headers.update(dict(rv.headers))
-            response.data = rv.get_data()
-        except Exception as e:
-            response.status_code = 500
-            response.data = str(e)
-    return response
+# Vercel expects the app to be the handler
+handler = app
