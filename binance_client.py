@@ -34,15 +34,29 @@ class BinanceWithdrawalClient:
                 testnet=self.testnet
             )
             
-            # 测试连接
-            account_info = self.client.get_account()
-            self.logger.info(f"成功连接到Binance API (测试网: {self.testnet})")
-            return True
+            # 测试连接 - 使用更简单的ping测试
+            try:
+                self.client.ping()
+                self.logger.info(f"成功连接到Binance API (测试网: {self.testnet})")
+                return True
+            except Exception as ping_error:
+                # 如果ping失败，尝试获取服务器时间
+                try:
+                    self.client.get_server_time()
+                    self.logger.info(f"成功连接到Binance API (测试网: {self.testnet})")
+                    return True
+                except Exception as time_error:
+                    self.logger.error(f"API连接测试失败: ping={str(ping_error)}, time={str(time_error)}")
+                    raise
             
+        except BinanceAPIException as e:
+            self.logger.error(f"Binance API错误: {e.code} - {e.message}")
+            self.client = None
+            raise
         except Exception as e:
             self.logger.error(f"连接Binance API失败: {str(e)}")
             self.client = None
-            return False
+            raise
     
     def get_account_info(self) -> Optional[Dict]:
         """获取账户信息"""

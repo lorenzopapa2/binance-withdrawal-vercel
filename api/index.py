@@ -54,16 +54,40 @@ def api_config():
         
         try:
             # 初始化Binance客户端
+            logger.info(f"尝试连接Binance API - Session: {session_id}, Testnet: {testnet}")
             binance_client = BinanceWithdrawalClient(api_key, api_secret, testnet)
             
             if binance_client.connect():
                 binance_clients[session_id] = binance_client
-                return jsonify({'success': True, 'message': f'API配置成功 (测试网: {testnet})'})
+                logger.info(f"API连接成功 - Session: {session_id}")
+                
+                # 测试获取账户信息
+                try:
+                    account_info = binance_client.get_account_info()
+                    if account_info:
+                        return jsonify({'success': True, 'message': f'API配置成功 (测试网: {testnet})'})
+                    else:
+                        return jsonify({'success': False, 'message': 'API连接成功但无法获取账户信息，请检查API权限'})
+                except Exception as test_error:
+                    logger.error(f"测试账户信息失败: {str(test_error)}")
+                    return jsonify({'success': False, 'message': f'API连接成功但测试失败: {str(test_error)}'})
             else:
+                logger.error("API连接失败")
                 return jsonify({'success': False, 'message': 'API连接失败，请检查Key和Secret'})
         except Exception as e:
             logger.error(f"API配置错误: {str(e)}")
-            return jsonify({'success': False, 'message': f'配置错误: {str(e)}'})
+            error_msg = str(e)
+            
+            # 提供更详细的错误信息
+            if 'APIError' in error_msg:
+                if '-2014' in error_msg:
+                    return jsonify({'success': False, 'message': 'API Key格式错误'})
+                elif '-2015' in error_msg:
+                    return jsonify({'success': False, 'message': 'API Key无效、IP未加入白名单或权限不足'})
+                elif '-1022' in error_msg:
+                    return jsonify({'success': False, 'message': 'API签名无效，请检查Secret'})
+            
+            return jsonify({'success': False, 'message': f'配置错误: {error_msg}'})
     
     else:
         # 获取当前配置状态
