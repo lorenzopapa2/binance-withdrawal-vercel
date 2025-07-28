@@ -384,5 +384,4 @@ def not_found(e):
 def server_error(e):
     return jsonify({'error': 'Internal server error'}), 500
 
-# 导出应用为Vercel处理器
-app = app
+# 不需要重复赋值

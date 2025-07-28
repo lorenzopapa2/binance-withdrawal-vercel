@@ -622,4 +622,4 @@ if __name__ == '__main__':
             logger.info('使用已保存的API配置成功连接到Binance')
     
     # 启动应用
-    socketio.run(app, debug=True, host='0.0.0.0', port=8888)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8888, allow_unsafe_werkzeug=True)
