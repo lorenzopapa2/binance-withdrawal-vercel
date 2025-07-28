@@ -64,8 +64,12 @@ class BinanceWithdrawalClient:
             return None
             
         try:
+            # 对于测试网，可能需要特殊处理
+            if self.testnet:
+                self.logger.info("使用测试网模式获取账户信息")
+                
             account_info = self.client.get_account()
-            return {
+            result = {
                 'account_type': account_info.get('accountType'),
                 'can_trade': account_info.get('canTrade'),
                 'can_withdraw': account_info.get('canWithdraw'),
@@ -80,9 +84,25 @@ class BinanceWithdrawalClient:
                     if float(balance['free']) > 0 or float(balance['locked']) > 0
                 ]
             }
+            
+            # 检查提现权限
+            if not result.get('can_withdraw'):
+                self.logger.warning("账户没有提现权限")
+                
+            return result
+            
+        except BinanceAPIException as e:
+            self.logger.error(f"Binance API错误: {e.code} - {e.message}")
+            if e.code == -2008:
+                raise Exception("API权限不足，请检查是否已开启'允许提现'权限")
+            elif e.code == -2015:
+                raise Exception("API无效或IP未在白名单中")
+            elif e.code == -1022:
+                raise Exception("签名无效，请检查API Secret")
+            raise
         except Exception as e:
             self.logger.error(f"获取账户信息失败: {str(e)}")
-            return None
+            raise
     
     def get_balance(self, asset: str) -> Optional[Dict]:
         """获取指定资产余额"""

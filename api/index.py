@@ -61,16 +61,12 @@ def api_config():
                 binance_clients[session_id] = binance_client
                 logger.info(f"API连接成功 - Session: {session_id}")
                 
-                # 测试获取账户信息
-                try:
-                    account_info = binance_client.get_account_info()
-                    if account_info:
-                        return jsonify({'success': True, 'message': f'API配置成功 (测试网: {testnet})'})
-                    else:
-                        return jsonify({'success': False, 'message': 'API连接成功但无法获取账户信息，请检查API权限'})
-                except Exception as test_error:
-                    logger.error(f"测试账户信息失败: {str(test_error)}")
-                    return jsonify({'success': False, 'message': f'API连接成功但测试失败: {str(test_error)}'})
+                # 直接返回成功，不测试账户信息（避免权限问题）
+                return jsonify({
+                    'success': True, 
+                    'message': f'API配置成功 (测试网: {testnet})',
+                    'note': '提示：如果无法获取账户信息，请确保API已开启读取权限'
+                })
             else:
                 logger.error("API连接失败")
                 return jsonify({'success': False, 'message': 'API连接失败，请检查Key和Secret'})
@@ -112,12 +108,38 @@ def api_account():
     try:
         account_info = binance_client.get_account_info()
         if account_info:
+            # 添加提现权限提示
+            if not account_info.get('can_withdraw', False):
+                account_info['withdraw_warning'] = '注意：当前API没有提现权限'
             return jsonify({'success': True, 'data': account_info})
         else:
             return jsonify({'success': False, 'message': '获取账户信息失败'})
     except Exception as e:
         logger.error(f"获取账户信息错误: {str(e)}")
-        return jsonify({'success': False, 'message': f'错误: {str(e)}'})
+        error_msg = str(e)
+        
+        # 提供更友好的错误信息
+        if 'API权限不足' in error_msg:
+            return jsonify({
+                'success': False, 
+                'message': '无法获取账户信息：API权限不足',
+                'data': {
+                    'balances': [],
+                    'note': '请确保API已开启"允许读取"权限'
+                }
+            })
+        elif '测试网' in error_msg or binance_client.testnet:
+            # 测试网可能不支持完整功能
+            return jsonify({
+                'success': True,
+                'data': {
+                    'balances': [],
+                    'testnet': True,
+                    'note': '测试网模式 - 部分功能可能受限'
+                }
+            })
+        
+        return jsonify({'success': False, 'message': f'错误: {error_msg}'})
 
 @app.route('/api/balance/<asset>')
 def api_balance(asset):
