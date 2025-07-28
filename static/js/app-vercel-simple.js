@@ -33,29 +33,45 @@ function initializeApp() {
 // 设置事件监听器
 function setupEventListeners() {
     // API配置表单
-    document.getElementById('api-config-form').addEventListener('submit', handleApiConfig);
+    const apiForm = document.getElementById('api-config-form');
+    if (apiForm) {
+        apiForm.addEventListener('submit', handleApiConfig);
+    }
 
     // 提币表单
-    document.getElementById('withdrawal-form').addEventListener('submit', handleWithdrawal);
+    const withdrawalForm = document.getElementById('withdrawal-form');
+    if (withdrawalForm) {
+        withdrawalForm.addEventListener('submit', handleWithdrawal);
+    }
 
     // 币种选择变化
-    document.getElementById('coin').addEventListener('change', updateNetworkOptions);
+    const coinSelect = document.getElementById('coin');
+    if (coinSelect) {
+        coinSelect.addEventListener('change', updateNetworkOptions);
+    }
 
     // 提币模式切换
-    document.getElementById('withdrawal-mode').addEventListener('change', toggleWithdrawalMode);
+    const modeSelect = document.getElementById('withdrawal-mode');
+    if (modeSelect) {
+        modeSelect.addEventListener('change', toggleWithdrawalMode);
+    }
 
     // 确认提币按钮
-    document.getElementById('confirm-withdraw').addEventListener('click', executeWithdrawal);
+    const confirmBtn = document.getElementById('confirm-withdraw');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', executeWithdrawal);
+    }
 }
 
 // 更新连接状态
 function updateConnectionStatus(connected) {
     const statusElement = document.getElementById('connection-status');
-    
-    if (connected) {
-        statusElement.innerHTML = '<i class="fas fa-circle text-success"></i> 已连接';
-    } else {
-        statusElement.innerHTML = '<i class="fas fa-circle text-danger"></i> 未连接';
+    if (statusElement) {
+        if (connected) {
+            statusElement.innerHTML = '<i class="fas fa-circle text-success"></i> 已连接';
+        } else {
+            statusElement.innerHTML = '<i class="fas fa-circle text-danger"></i> 未连接';
+        }
     }
 }
 
@@ -79,10 +95,15 @@ async function loadApiConfig() {
         const response = await fetchWithSession('/api/config');
         const data = await response.json();
         
-        if (data.api_key) {
-            document.getElementById('api-key').value = data.api_key;
+        const apiKeyInput = document.getElementById('api-key');
+        const testnetInput = document.getElementById('testnet');
+        
+        if (data.api_key && apiKeyInput) {
+            apiKeyInput.value = data.api_key;
         }
-        document.getElementById('testnet').checked = data.testnet;
+        if (testnetInput) {
+            testnetInput.checked = data.testnet;
+        }
         
         if (data.connected) {
             updateConnectionStatus(true);
@@ -151,6 +172,8 @@ async function refreshAccount() {
 // 显示账户信息
 function displayAccountInfo(accountData) {
     const balancesList = document.getElementById('balances-list');
+    if (!balancesList) return;
+    
     balancesList.innerHTML = '';
     
     if (accountData.balances && accountData.balances.length > 0) {
@@ -175,21 +198,17 @@ function displayAccountInfo(accountData) {
 function updateNetworkOptions() {
     const coin = document.getElementById('coin').value;
     const networkSelect = document.getElementById('network');
-    const batchNetworkSelect = document.getElementById('batch-network');
-    const smartNetworkSelect = document.getElementById('smart-network');
+    
+    if (!networkSelect) return;
     
     const networks = COIN_NETWORKS[coin] || [];
     
-    [networkSelect, batchNetworkSelect, smartNetworkSelect].forEach(select => {
-        if (select) {
-            select.innerHTML = '<option value="">选择网络</option>';
-            networks.forEach(network => {
-                const option = document.createElement('option');
-                option.value = network;
-                option.textContent = network;
-                select.appendChild(option);
-            });
-        }
+    networkSelect.innerHTML = '<option value="">选择网络</option>';
+    networks.forEach(network => {
+        const option = document.createElement('option');
+        option.value = network;
+        option.textContent = network;
+        networkSelect.appendChild(option);
     });
 }
 
@@ -197,188 +216,32 @@ function updateNetworkOptions() {
 function toggleWithdrawalMode() {
     const mode = document.getElementById('withdrawal-mode').value;
     
-    // 根据模式显示不同的数量配置
-    document.getElementById('fixed-amount-config').style.display = mode === 'fixed' ? 'block' : 'none';
-    document.getElementById('random-amount-config').style.display = mode === 'random' ? 'block' : 'none';
+    const fixedConfig = document.getElementById('fixed-amount-config');
+    const randomConfig = document.getElementById('random-amount-config');
+    
+    if (fixedConfig && randomConfig) {
+        fixedConfig.style.display = mode === 'fixed' ? 'block' : 'none';
+        randomConfig.style.display = mode === 'random' ? 'block' : 'none';
+    }
 }
 
 // 处理提币
 function handleWithdrawal(event) {
     event.preventDefault();
     
-    confirmSmartWithdrawal();
-}
-
-// 确认单笔提币
-function confirmSingleWithdrawal() {
     const coin = document.getElementById('coin').value;
     const network = document.getElementById('network').value;
-    const address = document.getElementById('address').value;
-    const amount = document.getElementById('amount').value;
-    const addressTag = document.getElementById('address-tag').value;
+    const addressList = document.getElementById('address-list').value;
+    const mode = document.getElementById('withdrawal-mode').value;
     
-    if (!coin || !network || !address || !amount) {
+    if (!coin || !network || !addressList.trim()) {
         showToast('请填写完整的提币信息', 'error');
         return;
     }
     
-    const html = `
-        <p><strong>币种:</strong> ${coin}</p>
-        <p><strong>网络:</strong> ${network}</p>
-        <p><strong>地址:</strong> ${address}</p>
-        <p><strong>数量:</strong> ${amount}</p>
-        ${addressTag ? `<p><strong>标签/备注:</strong> ${addressTag}</p>` : ''}
-    `;
-    
-    document.getElementById('withdrawal-details').innerHTML = html;
-    
-    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
-    modal.show();
-}
-
-// 执行提币
-async function executeWithdrawal() {
-    const mode = document.getElementById('withdrawal-mode').value;
-    
-    if (mode === 'single') {
-        await executeSingleWithdrawal();
-    } else if (mode === 'batch') {
-        await executeBatchWithdrawal();
-    } else if (mode === 'smart') {
-        await executeSmartWithdrawal();
-    }
-}
-
-// 执行单笔提币
-async function executeSingleWithdrawal() {
-    const coin = document.getElementById('coin').value;
-    const network = document.getElementById('network').value;
-    const address = document.getElementById('address').value;
-    const amount = document.getElementById('amount').value;
-    const addressTag = document.getElementById('address-tag').value;
-    
-    try {
-        const response = await fetchWithSession('/api/withdraw', {
-            method: 'POST',
-            body: JSON.stringify({
-                coin: coin,
-                network: network,
-                address: address,
-                amount: amount,
-                address_tag: addressTag
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            addLogEntry('success', `提币成功: ${coin} ${amount} -> ${address}`, new Date().toISOString());
-            
-            // 清空表单
-            document.getElementById('address').value = '';
-            document.getElementById('amount').value = '';
-            document.getElementById('address-tag').value = '';
-            
-            // 刷新账户余额
-            refreshAccount();
-        } else {
-            showToast(data.message, 'error');
-            addLogEntry('error', `提币失败: ${data.message}`, new Date().toISOString());
-        }
-        
-        // 关闭确认弹窗
-        const modal = bootstrap.Modal.getInstance(document.getElementById('confirmModal'));
-        modal.hide();
-        
-    } catch (error) {
-        console.error('提币失败:', error);
-        showToast('提币失败: ' + error.message, 'error');
-        addLogEntry('error', `提币异常: ${error.message}`, new Date().toISOString());
-    }
-}
-
-// 执行批量提币
-async function executeBatchWithdrawal() {
-    const coin = document.getElementById('batch-coin').value;
-    const network = document.getElementById('batch-network').value;
-    const addressesText = document.getElementById('batch-addresses').value;
-    
     // 解析地址列表
     const addresses = [];
-    const lines = addressesText.trim().split('\n');
-    
-    for (const line of lines) {
-        const parts = line.trim().split(/[\s,;]+/);
-        if (parts.length >= 2) {
-            addresses.push({
-                address: parts[0],
-                amount: parts[1],
-                addressTag: parts[2] || ''
-            });
-        }
-    }
-    
-    if (addresses.length === 0) {
-        showToast('请输入有效的地址列表', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetchWithSession('/api/batch-withdraw', {
-            method: 'POST',
-            body: JSON.stringify({
-                coin: coin,
-                network: network,
-                addresses: addresses
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showToast(data.message, 'success');
-            
-            // 显示结果
-            if (data.results) {
-                data.results.forEach(result => {
-                    addLogEntry(
-                        result.success ? 'success' : 'error',
-                        `${result.address}: ${result.message}`,
-                        new Date().toISOString()
-                    );
-                });
-            }
-            
-            // 清空表单
-            document.getElementById('batch-addresses').value = '';
-            
-            // 刷新账户余额
-            refreshAccount();
-        } else {
-            showToast(data.message, 'error');
-        }
-        
-        // 关闭确认弹窗
-        const modal = bootstrap.Modal.getInstance(document.getElementById('confirmModal'));
-        modal.hide();
-        
-    } catch (error) {
-        console.error('批量提币失败:', error);
-        showToast('批量提币失败: ' + error.message, 'error');
-    }
-}
-
-// 执行智能提币
-async function executeSmartWithdrawal() {
-    const coin = document.getElementById('smart-coin').value;
-    const network = document.getElementById('smart-network').value;
-    const addressesText = document.getElementById('smart-addresses').value;
-    const amountMode = document.getElementById('amount-mode').value;
-    
-    // 解析地址列表
-    const addresses = [];
-    const lines = addressesText.trim().split('\n');
+    const lines = addressList.trim().split('\n');
     
     for (const line of lines) {
         const trimmed = line.trim();
@@ -394,6 +257,51 @@ async function executeSmartWithdrawal() {
     if (addresses.length === 0) {
         showToast('请输入有效的地址列表', 'error');
         return;
+    }
+    
+    // 构建确认信息
+    let html = `
+        <p><strong>币种:</strong> ${coin}</p>
+        <p><strong>网络:</strong> ${network}</p>
+        <p><strong>地址数量:</strong> ${addresses.length}</p>
+        <p><strong>提币模式:</strong> ${mode === 'fixed' ? '固定数量' : '随机数量'}</p>
+    `;
+    
+    if (mode === 'fixed') {
+        const amount = document.getElementById('fixed-amount').value;
+        html += `<p><strong>固定数量:</strong> ${amount}</p>`;
+    } else {
+        const minAmount = document.getElementById('min-amount').value;
+        const maxAmount = document.getElementById('max-amount').value;
+        html += `<p><strong>随机区间:</strong> ${minAmount} - ${maxAmount}</p>`;
+    }
+    
+    document.getElementById('withdrawal-details').innerHTML = html;
+    
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+    modal.show();
+}
+
+// 执行提币
+async function executeWithdrawal() {
+    const coin = document.getElementById('coin').value;
+    const network = document.getElementById('network').value;
+    const addressesText = document.getElementById('address-list').value;
+    const amountMode = document.getElementById('withdrawal-mode').value;
+    
+    // 解析地址列表
+    const addresses = [];
+    const lines = addressesText.trim().split('\n');
+    
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+            const parts = trimmed.split(/[\s,;]+/);
+            addresses.push({
+                address: parts[0],
+                tag: parts[1] || ''
+            });
+        }
     }
     
     // 构建数量配置
@@ -439,7 +347,7 @@ async function executeSmartWithdrawal() {
             }
             
             // 清空表单
-            document.getElementById('smart-addresses').value = '';
+            document.getElementById('address-list').value = '';
             
             // 刷新账户余额
             refreshAccount();
@@ -464,8 +372,11 @@ async function refreshIPInfo() {
         const data = await response.json();
         
         if (data.success && data.data) {
-            document.getElementById('client-ip').textContent = data.data.client_ip || '未知';
-            document.getElementById('server-region').textContent = data.data.server_region || '未知';
+            const clientIp = document.getElementById('client-ip');
+            const serverRegion = document.getElementById('server-region');
+            
+            if (clientIp) clientIp.textContent = data.data.client_ip || '未知';
+            if (serverRegion) serverRegion.textContent = data.data.server_region || '未知';
         }
     } catch (error) {
         console.error('获取IP信息失败:', error);
@@ -474,7 +385,9 @@ async function refreshIPInfo() {
 
 // 添加日志条目
 function addLogEntry(type, message, timestamp) {
-    const logContainer = document.getElementById('log-container');
+    const logContainer = document.getElementById('real-time-logs');
+    if (!logContainer) return;
+    
     const entry = document.createElement('div');
     entry.className = `log-entry log-${type}`;
     
@@ -502,17 +415,18 @@ function showToast(message, type = 'info') {
         </div>
     `;
     
-    const toastContainer = document.getElementById('toast-container');
+    let toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
         const container = document.createElement('div');
         container.id = 'toast-container';
         container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
         document.body.appendChild(container);
+        toastContainer = container;
     }
     
     const toastElement = document.createElement('div');
     toastElement.innerHTML = toastHtml;
-    document.getElementById('toast-container').appendChild(toastElement);
+    toastContainer.appendChild(toastElement);
     
     const toast = new bootstrap.Toast(toastElement.firstElementChild);
     toast.show();
@@ -520,4 +434,41 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toastElement.remove();
     }, 5000);
+}
+
+// 清空日志
+function clearLogs() {
+    const logContainer = document.getElementById('real-time-logs');
+    if (logContainer) {
+        logContainer.innerHTML = '<div class="text-muted">等待日志...</div>';
+    }
+}
+
+// 刷新提币历史
+function refreshWithdrawalHistory() {
+    // Vercel版本不支持历史记录
+    showToast('Vercel版本不支持历史记录功能', 'info');
+}
+
+// 验证地址列表
+function validateAddressList() {
+    const addressesText = document.getElementById('address-list').value;
+    const lines = addressesText.trim().split('\n');
+    let validCount = 0;
+    
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) {
+            validCount++;
+        }
+    }
+    
+    const resultElement = document.getElementById('address-validation-result');
+    if (resultElement) {
+        if (validCount > 0) {
+            resultElement.innerHTML = `<span class="text-success">✓ ${validCount} 个有效地址</span>`;
+        } else {
+            resultElement.innerHTML = '<span class="text-danger">✗ 未找到有效地址</span>';
+        }
+    }
 }
