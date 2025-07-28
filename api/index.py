@@ -1,31 +1,30 @@
 import os
-import logging
-import requests
-import random
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Flask, render_template, request, jsonify
 import json
 from datetime import datetime
 import uuid
-import sys
-import os
+import random
+import logging
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from config import config
-from binance_client import BinanceWithdrawalClient
+# 尝试导入依赖，如果失败则使用简化版本
+try:
+    from config import config
+    from binance_client import BinanceWithdrawalClient
+    HAS_BINANCE = True
+except ImportError:
+    HAS_BINANCE = False
+    config = {'production': {}}
 
 # 创建Flask应用
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.config['TEMPLATES_AUTO_RELOAD'] = True
-app.config.from_object(config['production'])
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-here')
 
 # 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 全局变量
@@ -39,6 +38,9 @@ def index():
 @app.route('/api/config', methods=['GET', 'POST'])
 def api_config():
     """API配置管理"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     
     if request.method == 'POST':
@@ -50,14 +52,18 @@ def api_config():
         if not api_key or not api_secret:
             return jsonify({'success': False, 'message': 'API Key和Secret不能为空'})
         
-        # 初始化Binance客户端
-        binance_client = BinanceWithdrawalClient(api_key, api_secret, testnet)
-        
-        if binance_client.connect():
-            binance_clients[session_id] = binance_client
-            return jsonify({'success': True, 'message': f'API配置成功 (测试网: {testnet})'})
-        else:
-            return jsonify({'success': False, 'message': 'API连接失败，请检查Key和Secret'})
+        try:
+            # 初始化Binance客户端
+            binance_client = BinanceWithdrawalClient(api_key, api_secret, testnet)
+            
+            if binance_client.connect():
+                binance_clients[session_id] = binance_client
+                return jsonify({'success': True, 'message': f'API配置成功 (测试网: {testnet})'})
+            else:
+                return jsonify({'success': False, 'message': 'API连接失败，请检查Key和Secret'})
+        except Exception as e:
+            logger.error(f"API配置错误: {str(e)}")
+            return jsonify({'success': False, 'message': f'配置错误: {str(e)}'})
     
     else:
         # 获取当前配置状态
@@ -70,36 +76,53 @@ def api_config():
 @app.route('/api/account')
 def api_account():
     """获取账户信息"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     binance_client = binance_clients.get(session_id)
     
     if not binance_client or not binance_client.client:
         return jsonify({'success': False, 'message': '请先配置API'})
     
-    account_info = binance_client.get_account_info()
-    if account_info:
-        return jsonify({'success': True, 'data': account_info})
-    else:
-        return jsonify({'success': False, 'message': '获取账户信息失败'})
+    try:
+        account_info = binance_client.get_account_info()
+        if account_info:
+            return jsonify({'success': True, 'data': account_info})
+        else:
+            return jsonify({'success': False, 'message': '获取账户信息失败'})
+    except Exception as e:
+        logger.error(f"获取账户信息错误: {str(e)}")
+        return jsonify({'success': False, 'message': f'错误: {str(e)}'})
 
 @app.route('/api/balance/<asset>')
 def api_balance(asset):
     """获取指定资产余额"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     binance_client = binance_clients.get(session_id)
     
     if not binance_client or not binance_client.client:
         return jsonify({'success': False, 'message': '请先配置API'})
     
-    balance = binance_client.get_balance(asset.upper())
-    if balance:
-        return jsonify({'success': True, 'data': balance})
-    else:
-        return jsonify({'success': False, 'message': f'获取{asset}余额失败'})
+    try:
+        balance = binance_client.get_balance(asset.upper())
+        if balance:
+            return jsonify({'success': True, 'data': balance})
+        else:
+            return jsonify({'success': False, 'message': f'获取{asset}余额失败'})
+    except Exception as e:
+        logger.error(f"获取余额错误: {str(e)}")
+        return jsonify({'success': False, 'message': f'错误: {str(e)}'})
 
 @app.route('/api/withdraw', methods=['POST'])
 def api_withdraw():
     """执行提币"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     binance_client = binance_clients.get(session_id)
     
@@ -158,6 +181,9 @@ def api_withdraw():
 @app.route('/api/batch-withdraw', methods=['POST'])
 def api_batch_withdraw():
     """批量提币"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     binance_client = binance_clients.get(session_id)
     
@@ -243,6 +269,9 @@ def api_batch_withdraw():
 @app.route('/api/smart-withdraw', methods=['POST'])
 def api_smart_withdraw():
     """智能批量提币"""
+    if not HAS_BINANCE:
+        return jsonify({'success': False, 'message': 'Binance模块未正确安装'})
+        
     session_id = request.headers.get('X-Session-ID', 'default')
     binance_client = binance_clients.get(session_id)
     
@@ -347,5 +376,13 @@ def api_ip_info():
         logger.error(f'获取IP信息失败: {str(e)}')
         return jsonify({'success': False, 'message': '获取IP信息失败'})
 
-# Vercel expects the app to be the handler
-handler = app
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({'error': 'Internal server error'}), 500
+
+# 导出应用为Vercel处理器
+app = app
